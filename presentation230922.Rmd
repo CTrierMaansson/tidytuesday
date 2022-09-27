@@ -1,0 +1,248 @@
+---
+title: "LEGO over time"
+output: ioslides_presentation
+date: "2022-09-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## LEGO
+
+Trends in LEGO production over time.
+
+```{r, echo=TRUE, eval=FALSE}
+library(tidyverse)
+library(ggrepel)
+library(gganimate)
+```
+
+
+```{r, echo = FALSE, message=FALSE}
+library(tidyverse)
+library(ggrepel)
+library(gganimate)
+inventories <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/inventories.csv.gz')
+inventory_sets <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/inventory_sets.csv.gz')
+sets <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/sets.csv.gz')
+colors <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/colors.csv.gz')
+elements <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/elements.csv.gz')
+inventory_minifigs <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/inventory_minifigs.csv.gz')
+inventory_parts <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/inventory_parts.csv.gz')
+minifigs <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/minifigs.csv.gz')
+part_categories <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/part_categories.csv.gz')
+part_relationships <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/part_relationships.csv.gz')
+parts <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/parts.csv.gz')
+themes <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-09-06/themes.csv.gz')
+
+```
+
+```{r, echo=FALSE}
+th <- theme(panel.background = element_rect(fill="#FFED00"), 
+            title = element_text(color = "blue",face="bold"))
+```
+
+## LEGO sets since 1949
+
+```{r, echo=FALSE}
+
+sets %>% 
+  group_by(year) %>% 
+  summarise(Counts = n()) %>% 
+  mutate(Cumulative = cumsum(Counts)) %>% 
+  filter(year != 2022) %>% 
+  pivot_longer(-year) %>% 
+  ggplot(aes(year,value)) +
+  theme_classic(14) +
+  th +
+  geom_point(size = 3, color="#E3000B") +
+  geom_line(color="#E3000B") +
+  labs(title = "LEGO set from 1949 to 2021",
+       x = "Year",
+       y = "Sets") +
+  facet_wrap(~name, scales = "free")
+  
+```
+
+## The code for the plot
+
+```{r, echo=TRUE, eval=FALSE}
+sets %>% 
+  group_by(year) %>% 
+  summarise(Counts = n()) %>% 
+  mutate(Cumulative = cumsum(Counts)) %>% 
+  filter(year != 2022) %>% 
+  pivot_longer(-year) %>% 
+  ggplot(aes(year,value)) +
+  theme_classic(14) +
+  th +
+  geom_point(size = 3, color="#E3000B") +
+  geom_line(color="#E3000B") +
+  labs(title = "LEGO set from 1949 to 2021",
+       x = "Year",
+       y = "Sets") +
+  facet_wrap(~name, scales = "free")
+```
+
+## dataset used
+```{r}
+slice_sample(themes,n=15)
+
+```
+##  dataset used
+```{r}
+slice_sample(sets,n=15)
+```
+
+
+## The 15 biggest LEGO themes
+
+```{r, echo=FALSE, warning=FALSE,out.width="100%",fig.width=8}
+
+sets_themes <- left_join(sets, themes, by = c("theme_id" = "id"))
+
+big_themes <- sets_themes %>%
+    mutate(parent_id = ifelse(is.na(parent_id), theme_id, parent_id)) %>%
+    filter(parent_id != 501) %>% 
+    group_by(parent_id) %>%
+    summarise(count = n()) %>%
+    arrange(desc(count)) %>%
+    slice(1:15) %>%
+    left_join(select(themes, id, name), by = c("parent_id" = "id"))
+
+sets_per_theme_per_year <- sets_themes %>%
+    mutate(parent_id = ifelse(is.na(parent_id), theme_id, parent_id)) %>%
+    group_by(year, parent_id) %>%
+    filter(parent_id %in% big_themes$parent_id) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    left_join(select(themes, id, name), by = c("parent_id" = "id")) %>%
+    select(-c(parent_id)) %>%
+    group_by(name) %>%
+    mutate(sums = cumsum(count)) %>%
+    filter(year != 2022) %>%
+    group_by(name) %>%
+    mutate(name_group = ifelse(sums == max(sums), name, NA))
+
+ggplot(data = sets_per_theme_per_year, aes(x = year, y = sums, color = name))+
+    geom_point()+
+    theme_classic(14)+
+    geom_line()+
+    labs(title = "Biggest themes development from 1949 - 2021",
+         x = "Year",
+         y = "Sets",
+         color = "Theme")+
+    geom_text_repel(aes(label = ifelse(is.na(sets_per_theme_per_year$name_group),
+                                        "", sets_per_theme_per_year$name_group)),
+                    box.padding = 0.35,
+                    point.padding = 0.1,
+                    nudge_x = 2,
+                    nudge_y = 100,
+                    segment.color = "black",
+                    parse = F,
+                    max.overlaps = 100)+
+    scale_x_continuous(limits = c(1945, 2030))+
+    scale_color_viridis_d(option = "turbo")+
+    guides(color = "none")+
+    th
+
+```
+
+## The code for the plot
+
+```{r,echo=TRUE, eval=FALSE}
+sets_themes <- left_join(sets, themes, by = c("theme_id" = "id"))
+
+big_themes <- sets_themes %>%
+    mutate(parent_id = ifelse(is.na(parent_id), theme_id, parent_id)) %>%
+    filter(parent_id != 501) %>% group_by(parent_id) %>%
+    summarise(count = n()) %>% arrange(desc(count)) %>% slice(1:15) %>%
+    left_join(select(themes, id, name), by = c("parent_id" = "id"))
+
+sets_per_theme_per_year <- sets_themes %>%
+    mutate(parent_id = ifelse(is.na(parent_id), theme_id, parent_id)) %>%
+    group_by(year, parent_id) %>% 
+    filter(parent_id %in% big_themes$parent_id) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    left_join(select(themes, id, name), by = c("parent_id" = "id")) %>%
+    select(-c(parent_id)) %>% group_by(name) %>%
+    mutate(sums = cumsum(count)) %>% filter(year != 2022) %>%
+    group_by(name) %>%
+    mutate(name_group = ifelse(sums == max(sums), name, NA))
+```
+
+## The code for the plot 2
+
+```{r,echo=TRUE, eval=FALSE}
+ggplot(data = sets_per_theme_per_year, aes(x = year, y = sums, color = name))+
+    geom_point()+
+    theme_classic(14)+
+    geom_line()+
+    labs(title = "Biggest themes development from 1949 - 2021",
+         x = "Year",y = "Sets", color = "Theme")+
+    geom_text_repel(
+      aes(label = ifelse(is.na(sets_per_theme_per_year$name_group),
+                              "", sets_per_theme_per_year$name_group)),
+                    box.padding = 0.35,
+                    point.padding = 0.1,
+                    nudge_x = 2,
+                    nudge_y = 100,
+                    segment.color = "black",
+                    parse = F,
+                    max.overlaps = 100)+
+    scale_x_continuous(limits = c(1945, 2030))+
+    scale_color_viridis_d(option = "turbo")+
+    guides(color = "none")+ th
+```
+
+## The 15 largest themes per year
+
+```{r, echo=FALSE, out.width="100%"}
+animation <- ggplot(sets_per_theme_per_year,aes(name,count, fill=name)) +
+  geom_bar(stat = "identity") +
+  coord_flip()+
+  guides(fill="none")+
+  theme_classic(10)+
+  th+
+  scale_color_viridis_d(option = "turbo")+
+  transition_states(year, transition_length = 1, state_length = 1) +
+  labs(title = "Number of produced sets, Year: {closest_state}",
+       x = "Set names", y = "Number of sets per year") +
+  ease_aes()
+
+animate(animation, fps = 4)
+```
+
+## The code for the plot
+```{r, echo=TRUE, eval=FALSE}
+animation <- ggplot(sets_per_theme_per_year,aes(name,count, fill=name)) +
+  geom_bar(stat = "identity") +
+  coord_flip()+
+  guides(fill="none")+
+  theme_classic(10)+
+  th+
+  scale_color_viridis_d(option = "turbo")+
+  transition_states(year, transition_length = 1, state_length = 1) +
+  labs(title = "Number of produced sets, Year: {closest_state}",
+       x = "Set names", y = "Number of sets per year") +
+  ease_aes()
+
+animate(animation, fps = 4)
+```
+
+## Forecast
+```{r, echo=FALSE}
+sets_per_theme_per_year_19_21 <- sets_per_theme_per_year %>%
+    filter(year == 2019 | year == 2020 | year == 2021) %>%
+  group_by(name)
+ggplot(data = sets_per_theme_per_year_19_21, aes(x = year, y = count, color = name))+
+    theme_classic(14)+
+    geom_line()+
+    labs(title = "What to buy for Christmas?",
+         x = "Year",
+         y = "New sets")+
+    scale_color_viridis_d(option = "turbo")+
+    scale_x_continuous(n.breaks = 3) +
+    th
+```
+
